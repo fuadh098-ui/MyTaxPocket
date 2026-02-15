@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Tax Pocket</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#1a73e8">
+  <meta name="description" content="Track travel distance and business expenses with Google Sheets integration">
+  
+  <!-- iOS Specific -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Travel Log">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Google Sans', 'Roboto', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: #f8f9fa;
+    }
+
+    .google-card {
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      box-shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+    }
+
+    .google-card:hover {
+      box-shadow: 0 1px 3px 0 rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15);
+    }
+
+    .google-button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 24px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .google-button:hover {
+      background: #1765cc;
+      box-shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+    }
+
+    .google-button:active {
+      background: #1557b0;
+    }
+
+    .google-button-secondary {
+      background: white;
+      color: #1a73e8;
+      border: 1px solid #dadce0;
+    }
+
+    .google-button-secondary:hover {
+      background: #f8f9fa;
+      border-color: #1a73e8;
+    }
+
+    .google-button-danger {
+      background: white;
+      color: #d93025;
+      border: 1px solid #dadce0;
+    }
+
+    .google-button-danger:hover {
+      background: #fce8e6;
+      border-color: #d93025;
+    }
+
+    .google-input {
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-size: 14px;
+      transition: all 0.2s;
+      width: 100%;
+      font-family: 'Google Sans', 'Roboto', sans-serif;
+    }
+
+    .google-input:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 1px #1a73e8;
+    }
+
+    .google-tab {
+      padding: 12px 24px;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-weight: 500;
+      color: #5f6368;
+      transition: all 0.2s;
+    }
+
+    .google-tab:hover {
+      color: #202124;
+      background: #f8f9fa;
+    }
+
+    .google-tab-active {
+      color: #1a73e8;
+      border-bottom-color: #1a73e8;
+    }
+
+    .stat-card {
+      background: white;
+      border-left: 4px solid #1a73e8;
+    }
+
+    .stat-card-travel {
+      border-left-color: #1a73e8;
+    }
+
+    .stat-card-expense {
+      border-left-color: #34a853;
+    }
+
+    .stat-card-total {
+      border-left-color: #ea4335;
+    }
+
+    .entry-item {
+      transition: all 0.2s;
+      border-left: 4px solid transparent;
+    }
+
+    .entry-item:hover {
+      border-left-color: #1a73e8;
+      background: #f8f9fa;
+    }
+
+    .delete-button {
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .entry-item:hover .delete-button {
+      opacity: 1;
+    }
+
+    .notification {
+      animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .receipt-preview {
+      max-width: 150px;
+      max-height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid #dadce0;
+    }
+
+    select.google-input {
+      background: white;
+      cursor: pointer;
+    }
+
+    textarea.google-input {
+      resize: vertical;
+      font-family: 'Google Sans', 'Roboto', sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Google Material Icons as inline SVG
+    const Calendar = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/>
+      </svg>
+    );
+
+    const Navigation = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+      </svg>
+    );
+
+    const AttachMoney = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
+      </svg>
+    );
+
+    const Receipt = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z"/>
+      </svg>
+    );
+
+    const Download = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+      </svg>
+    );
+
+    const Delete = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+      </svg>
+    );
+
+    const Edit = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+      </svg>
+    );
+
+    const Save = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg>
+    );
+
+    const CloudUpload = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+      </svg>
+    );
+
+    const Place = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+      </svg>
+    );
+
+    const CheckCircle = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+      </svg>
+    );
+
+    const Error = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+    );
+
+    const Close = ({ size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+      </svg>
+    );
+
+    function TravelLog() {
+      const [activeTab, setActiveTab] = useState('travel');
+      const [travelEntries, setTravelEntries] = useState([]);
+      const [expenseEntries, setExpenseEntries] = useState([]);
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [notification, setNotification] = useState(null);
+      const [sheetUrl, setSheetUrl] = useState(localStorage.getItem('sheetUrl') || '');
+      const [isConfigured, setIsConfigured] = useState(!!localStorage.getItem('sheetUrl'));
+      const [deleteConfirm, setDeleteConfirm] = useState(null);
+      const [editingEntry, setEditingEntry] = useState(null);
+      
+      const [travelFormData, setTravelFormData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        distance: '',
+        location: '',
+        purpose: ''
+      });
+
+      const [expenseFormData, setExpenseFormData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        amount: '',
+        description: '',
+        category: '',
+        receipt: null,
+        receiptPreview: null
+      });
+
+      const showNotification = (message, type = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4000);
+      };
+
+      const calculateTotalDistance = () => {
+        return travelEntries.reduce((total, entry) => total + parseFloat(entry.distance || 0), 0).toFixed(1);
+      };
+
+      const calculateTotalExpenses = () => {
+        return expenseEntries.reduce((total, entry) => total + parseFloat(entry.amount || 0), 0).toFixed(2);
+      };
+
+      const exportToCSV = () => {
+        if (activeTab === 'travel') {
+          if (travelEntries.length === 0) {
+            showNotification('No travel entries to export', 'error');
+            return;
+          }
+
+          const headers = ['Date', 'Distance (km)', 'Location', 'Purpose'];
+          const csvContent = [
+            headers.join(','),
+            ...travelEntries.map(entry => 
+              `${entry.date},${entry.distance},"${entry.location}","${entry.purpose}"`
+            )
+          ].join('\n');
+
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `travel_log_${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+          
+          showNotification('Travel log exported successfully!');
+        } else {
+          if (expenseEntries.length === 0) {
+            showNotification('No expense entries to export', 'error');
+            return;
+          }
+
+          const headers = ['Date', 'Amount', 'Description', 'Category', 'Receipt Link'];
+          const csvContent = [
+            headers.join(','),
+            ...expenseEntries.map(entry => 
+              `${entry.date},${entry.amount},"${entry.description}","${entry.category}","${entry.receiptUrl || 'N/A'}"`
+            )
+          ].join('\n');
+
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+          
+          showNotification('Expenses exported successfully!');
+        }
+      };
+
+      const handleConfigSave = () => {
+        if (!sheetUrl.trim()) {
+          showNotification('Please enter a Google Apps Script URL', 'error');
+          return;
+        }
+        localStorage.setItem('sheetUrl', sheetUrl);
+        setIsConfigured(true);
+        showNotification('Configuration saved!');
+      };
+
+      const handleDelete = async (id, type) => {
+        try {
+          // Send delete request to Google Sheets
+          await fetch(sheetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'delete',
+              entryId: id,
+              entryType: type
+            })
+          });
+
+          // Remove from app display
+          if (type === 'travel') {
+            setTravelEntries(travelEntries.filter(entry => entry.id !== id));
+          } else {
+            setExpenseEntries(expenseEntries.filter(entry => entry.id !== id));
+          }
+          
+          setDeleteConfirm(null);
+          showNotification('Entry marked as deleted in Google Sheets!');
+        } catch (error) {
+          showNotification('Failed to mark as deleted', 'error');
+        }
+      };
+
+      const handleEditEntry = (entry, type) => {
+        setEditingEntry({ ...entry, type });
+        
+        if (type === 'travel') {
+          setTravelFormData({
+            date: entry.date,
+            distance: entry.distance,
+            location: entry.location,
+            purpose: entry.purpose
+          });
+        } else {
+          setExpenseFormData({
+            date: entry.date,
+            amount: entry.amount,
+            description: entry.description,
+            category: entry.category,
+            receipt: null,
+            receiptPreview: null
+          });
+        }
+        
+        // Scroll to form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleCancelEdit = () => {
+        setEditingEntry(null);
+        setTravelFormData({
+          date: new Date().toISOString().split('T')[0],
+          distance: '',
+          location: '',
+          purpose: ''
+        });
+        setExpenseFormData({
+          date: new Date().toISOString().split('T')[0],
+          amount: '',
+          description: '',
+          category: '',
+          receipt: null,
+          receiptPreview: null
+        });
+      };
+
+      const handleUpdateEntry = async (e) => {
+        e.preventDefault();
+        if (!editingEntry) return;
+        
+        setIsSubmitting(true);
+        
+        try {
+          const dataToSend = {
+            type: 'edit',
+            entryId: editingEntry.id,
+            entryType: editingEntry.type,
+            ...(editingEntry.type === 'travel' ? travelFormData : {
+              date: expenseFormData.date,
+              amount: expenseFormData.amount,
+              description: expenseFormData.description,
+              category: expenseFormData.category
+            })
+          };
+          
+          await fetch(sheetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSend)
+          });
+          
+          // Update local state
+          if (editingEntry.type === 'travel') {
+            setTravelEntries(travelEntries.map(e => 
+              e.id === editingEntry.id ? { ...e, ...travelFormData } : e
+            ));
+          } else {
+            setExpenseEntries(expenseEntries.map(e => 
+              e.id === editingEntry.id ? { 
+                ...e, 
+                date: expenseFormData.date,
+                amount: expenseFormData.amount,
+                description: expenseFormData.description,
+                category: expenseFormData.category
+              } : e
+            ));
+          }
+          
+          handleCancelEdit();
+          showNotification('Entry updated successfully!');
+          
+        } catch (error) {
+          showNotification('Failed to update entry', 'error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
+
+      const handleTravelSubmit = async (e) => {
+        e.preventDefault();
+        
+        // If editing, use update handler instead
+        if (editingEntry) {
+          return handleUpdateEntry(e);
+        }
+        
+        if (!isConfigured) {
+          showNotification('Please configure your Google Sheet URL first', 'error');
+          return;
+        }
+
+        if (!travelFormData.distance || !travelFormData.location || !travelFormData.purpose) {
+          showNotification('Please fill in all fields', 'error');
+          return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+          const entryId = `TRV-${Date.now()}`;
+          
+          await fetch(sheetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'travel',
+              entryId: entryId,
+              date: travelFormData.date,
+              distance: travelFormData.distance,
+              location: travelFormData.location,
+              purpose: travelFormData.purpose
+            })
+          });
+
+          const newEntry = { ...travelFormData, id: entryId };
+          setTravelEntries([newEntry, ...travelEntries]);
+          
+          setTravelFormData({
+            date: new Date().toISOString().split('T')[0],
+            distance: '',
+            location: '',
+            purpose: ''
+          });
+          
+          showNotification('Travel entry logged successfully!');
+        } catch (error) {
+          showNotification('Failed to log entry', 'error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
+
+      const handleExpenseSubmit = async (e) => {
+        e.preventDefault();
+        
+        // If editing, use update handler instead
+        if (editingEntry) {
+          return handleUpdateEntry(e);
+        }
+        
+        if (!isConfigured) {
+          showNotification('Please configure your Google Sheet URL first', 'error');
+          return;
+        }
+
+        if (!expenseFormData.amount || !expenseFormData.description || !expenseFormData.category) {
+          showNotification('Please fill in all required fields', 'error');
+          return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+          const entryId = `EXP-${Date.now()}`;
+          let receiptData = null;
+          
+          if (expenseFormData.receipt) {
+            const reader = new FileReader();
+            receiptData = await new Promise((resolve, reject) => {
+              reader.onload = () => {
+                const base64String = reader.result.split(',')[1];
+                resolve(base64String);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(expenseFormData.receipt);
+            });
+          }
+
+          const dataToSend = {
+            type: 'expense',
+            entryId: entryId,
+            date: expenseFormData.date,
+            amount: expenseFormData.amount,
+            description: expenseFormData.description,
+            category: expenseFormData.category,
+            receiptData: receiptData,
+            receiptFileName: expenseFormData.receipt ? expenseFormData.receipt.name : null,
+            receiptMimeType: expenseFormData.receipt ? expenseFormData.receipt.type : null
+          };
+
+          await fetch(sheetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dataToSend)
+          });
+
+          const newEntry = { 
+            ...expenseFormData, 
+            id: entryId,
+            receiptName: expenseFormData.receipt ? expenseFormData.receipt.name : null,
+            receiptUrl: expenseFormData.receipt ? 'Uploaded to Drive' : null
+          };
+          setExpenseEntries([newEntry, ...expenseEntries]);
+          
+          setExpenseFormData({
+            date: new Date().toISOString().split('T')[0],
+            amount: '',
+            description: '',
+            category: '',
+            receipt: null,
+            receiptPreview: null
+          });
+          
+          showNotification(expenseFormData.receipt ? 
+            'Expense logged! Receipt uploaded to Google Drive' : 
+            'Expense logged successfully!');
+        } catch (error) {
+          showNotification('Failed to log expense', 'error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
+
+      const handleTravelInputChange = (e) => {
+        setTravelFormData({
+          ...travelFormData,
+          [e.target.name]: e.target.value
+        });
+      };
+
+      const handleExpenseInputChange = (e) => {
+        setExpenseFormData({
+          ...expenseFormData,
+          [e.target.name]: e.target.value
+        });
+      };
+
+      const handleReceiptUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          if (file.size > 5 * 1024 * 1024) {
+            showNotification('File size must be less than 5MB', 'error');
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setExpenseFormData({
+              ...expenseFormData,
+              receipt: file,
+              receiptPreview: reader.result
+            });
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+
+      const removeReceipt = () => {
+        setExpenseFormData({
+          ...expenseFormData,
+          receipt: null,
+          receiptPreview: null
+        });
+      };
+
+      if (!isConfigured) {
+        return (
+          <div className="min-h-screen bg-gray-50 p-6">
+            <div className="max-w-2xl mx-auto mt-20">
+              <div className="google-card p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <Receipt size={32} className="text-blue-600" />
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">My Tax Pocket</h1>
+                    <p className="text-gray-600 text-sm mt-1">Connect to Google Sheets</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Google Apps Script URL
+                    </label>
+                    <input
+                      type="text"
+                      value={sheetUrl}
+                      onChange={(e) => setSheetUrl(e.target.value)}
+                      placeholder="https://script.google.com/macros/s/..."
+                      className="google-input"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={handleConfigSave}
+                    className="google-button w-full"
+                  >
+                    Connect to Google Sheets
+                  </button>
+                  
+                  <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="font-medium text-gray-900 mb-2 text-sm">Setup Instructions:</h3>
+                    <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
+                      <li>Create a Google Sheet</li>
+                      <li>Go to Extensions → Apps Script</li>
+                      <li>Paste the provided script code</li>
+                      <li>Deploy as Web App</li>
+                      <li>Copy the URL and paste it above</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          {notification && (
+            <div className={`fixed top-4 right-4 px-4 py-3 rounded-lg notification flex items-center gap-3 shadow-lg z-50 ${
+              notification.type === 'success' 
+                ? 'bg-green-50 text-green-800 border border-green-200' 
+                : 'bg-red-50 text-red-800 border border-red-200'
+            }`}>
+              {notification.type === 'success' ? (
+                <CheckCircle size={20} className="text-green-600" />
+              ) : (
+                <Error size={20} className="text-red-600" />
+              )}
+              <span className="font-medium text-sm">{notification.message}</span>
+            </div>
+          )}
+
+          <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+            <div className="max-w-7xl mx-auto px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Receipt size={32} className="text-green-600" />
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">My Tax Pocket</h1>
+                    <p className="text-sm text-gray-600">Track distance and expenses</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('sheetUrl');
+                    setIsConfigured(false);
+                  }}
+                  className="text-sm text-gray-600 hover:text-gray-900"
+                >
+                  Reconfigure
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-7xl mx-auto p-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="google-card p-4 stat-card stat-card-travel">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Distance</p>
+                    <p className="text-3xl font-bold text-gray-900">{calculateTotalDistance()}</p>
+                    <p className="text-xs text-gray-500 mt-1">kilometers</p>
+                  </div>
+                  <Navigation size={40} className="text-blue-600 opacity-50" />
+                </div>
+              </div>
+
+              <div className="google-card p-4 stat-card stat-card-expense">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Expenses</p>
+                    <p className="text-3xl font-bold text-gray-900">${calculateTotalExpenses()}</p>
+                    <p className="text-xs text-gray-500 mt-1">all categories</p>
+                  </div>
+                  <AttachMoney size={40} className="text-green-600 opacity-50" />
+                </div>
+              </div>
+
+              <div className="google-card p-4 stat-card stat-card-total">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Entries</p>
+                    <p className="text-3xl font-bold text-gray-900">{travelEntries.length + expenseEntries.length}</p>
+                    <p className="text-xs text-gray-500 mt-1">logged items</p>
+                  </div>
+                  <Receipt size={40} className="text-red-600 opacity-50" />
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="google-card mb-6">
+              <div className="flex border-b border-gray-200">
+                <button
+                  onClick={() => setActiveTab('travel')}
+                  className={`google-tab ${activeTab === 'travel' ? 'google-tab-active' : ''}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Navigation size={20} />
+                    Travel Log
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('expenses')}
+                  className={`google-tab ${activeTab === 'expenses' ? 'google-tab-active' : ''}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <AttachMoney size={20} />
+                    Business Expenses
+                  </div>
+                </button>
+                <button
+                  onClick={exportToCSV}
+                  className="google-tab ml-auto"
+                >
+                  <div className="flex items-center gap-2">
+                    <Download size={20} />
+                    Export CSV
+                  </div>
+                </button>
+              </div>
+
+              <div className="p-6">
+                {/* Travel Tab */}
+                {activeTab === 'travel' && (
+                  <div className="grid md:grid-cols-5 gap-6">
+                    <div className="md:col-span-2">
+                      <form onSubmit={handleTravelSubmit} className="space-y-4">
+                        <h2 className="text-lg font-medium text-gray-900 mb-4">
+                          {editingEntry && editingEntry.type === 'travel' ? 'Edit Travel Entry' : 'New Travel Entry'}
+                        </h2>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <Calendar size={16} className="inline mr-1" />
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            name="date"
+                            value={travelFormData.date}
+                            onChange={handleTravelInputChange}
+                            className="google-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <Navigation size={16} className="inline mr-1" />
+                            Distance (km)
+                          </label>
+                          <input
+                            type="number"
+                            name="distance"
+                            value={travelFormData.distance}
+                            onChange={handleTravelInputChange}
+                            placeholder="0"
+                            step="0.1"
+                            className="google-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <Place size={16} className="inline mr-1" />
+                            Location
+                          </label>
+                          <input
+                            type="text"
+                            name="location"
+                            value={travelFormData.location}
+                            onChange={handleTravelInputChange}
+                            placeholder="Enter destination"
+                            className="google-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Purpose
+                          </label>
+                          <textarea
+                            name="purpose"
+                            value={travelFormData.purpose}
+                            onChange={handleTravelInputChange}
+                            placeholder="Business, Personal, etc."
+                            rows="3"
+                            className="google-input"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="google-button w-full"
+                        >
+                          {isSubmitting ? 'Saving...' : (editingEntry && editingEntry.type === 'travel' ? 'Update Entry' : 'Log Entry')}
+                        </button>
+
+                        {editingEntry && editingEntry.type === 'travel' && (
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="w-full border border-gray-300 text-gray-700 px-6 py-2 rounded font-medium hover:bg-gray-50 transition-all text-sm"
+                          >
+                            Cancel Edit
+                          </button>
+                        )}
+                      </form>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Entries</h2>
+                      
+                      {travelEntries.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                          <Navigation size={48} className="mx-auto opacity-30 mb-2" />
+                          <p>No entries yet</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {travelEntries.map((entry) => (
+                            <div
+                              key={entry.id}
+                              className="google-card p-4 entry-item"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Place size={18} className="text-blue-600" />
+                                    <h3 className="font-medium text-gray-900">{entry.location}</h3>
+                                  </div>
+                                  <p className="text-sm text-gray-600 mb-1">{entry.purpose}</p>
+                                  <p className="text-xs text-gray-500">{entry.date}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <div className="text-2xl font-bold text-blue-600">{entry.distance}</div>
+                                    <div className="text-xs text-gray-500">km</div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleEditEntry(entry, 'travel')}
+                                    className="delete-button google-button-secondary px-3 py-2"
+                                    title="Edit entry"
+                                  >
+                                    <Edit size={18} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm({ id: entry.id, type: 'travel' })}
+                                    className="delete-button google-button-danger px-3 py-2"
+                                  >
+                                    <Delete size={18} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expenses Tab */}
+                {activeTab === 'expenses' && (
+                  <div className="grid md:grid-cols-5 gap-6">
+                    <div className="md:col-span-2">
+                      <form onSubmit={handleExpenseSubmit} className="space-y-4">
+                        <h2 className="text-lg font-medium text-gray-900 mb-4">
+                          {editingEntry && editingEntry.type === 'expense' ? 'Edit Expense' : 'New Expense'}
+                        </h2>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <Calendar size={16} className="inline mr-1" />
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            name="date"
+                            value={expenseFormData.date}
+                            onChange={handleExpenseInputChange}
+                            className="google-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <AttachMoney size={16} className="inline mr-1" />
+                            Amount
+                          </label>
+                          <input
+                            type="number"
+                            name="amount"
+                            value={expenseFormData.amount}
+                            onChange={handleExpenseInputChange}
+                            placeholder="0.00"
+                            step="0.01"
+                            className="google-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Category
+                          </label>
+                          <select
+                            name="category"
+                            value={expenseFormData.category}
+                            onChange={handleExpenseInputChange}
+                            className="google-input"
+                          >
+                            <option value="">Select category</option>
+                            <option value="Accommodation">Accommodation</option>
+                            <option value="Meals">Meals</option>
+                            <option value="Fuel">Fuel</option>
+                            <option value="Parking">Parking</option>
+                            <option value="Tolls">Tolls</option>
+                            <option value="Entertainment">Entertainment</option>
+                            <option value="Office Supplies">Office Supplies</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Description
+                          </label>
+                          <textarea
+                            name="description"
+                            value={expenseFormData.description}
+                            onChange={handleExpenseInputChange}
+                            placeholder="Brief description"
+                            rows="3"
+                            className="google-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <CloudUpload size={16} className="inline mr-1" />
+                            Receipt (Optional)
+                          </label>
+                          
+                          {!expenseFormData.receiptPreview ? (
+                            <label className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 transition-colors block">
+                              <CloudUpload size={32} className="mx-auto text-gray-400 mb-2" />
+                              <span className="text-sm text-gray-600">Click to upload</span>
+                              <span className="block text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleReceiptUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          ) : (
+                            <div className="relative">
+                              <img 
+                                src={expenseFormData.receiptPreview} 
+                                alt="Receipt" 
+                                className="receipt-preview w-full"
+                              />
+                              <button
+                                type="button"
+                                onClick={removeReceipt}
+                                className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full"
+                              >
+                                <Close size={16} />
+                              </button>
+                              <p className="text-xs text-gray-600 mt-2">{expenseFormData.receipt.name}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="google-button w-full"
+                        >
+                          {isSubmitting ? 'Saving...' : (editingEntry && editingEntry.type === 'expense' ? 'Update Expense' : 'Log Expense')}
+                        </button>
+
+                        {editingEntry && editingEntry.type === 'expense' && (
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="w-full border border-gray-300 text-gray-700 px-6 py-2 rounded font-medium hover:bg-gray-50 transition-all text-sm"
+                          >
+                            Cancel Edit
+                          </button>
+                        )}
+                      </form>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Expenses</h2>
+                      
+                      {expenseEntries.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                          <Receipt size={48} className="mx-auto opacity-30 mb-2" />
+                          <p>No expenses yet</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {expenseEntries.map((entry) => (
+                            <div
+                              key={entry.id}
+                              className="google-card p-4 entry-item"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Receipt size={18} className="text-green-600" />
+                                    <h3 className="font-medium text-gray-900">{entry.category}</h3>
+                                  </div>
+                                  <p className="text-sm text-gray-600 mb-1">{entry.description}</p>
+                                  <p className="text-xs text-gray-500">{entry.date}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <div className="text-2xl font-bold text-green-600">${entry.amount}</div>
+                                    {entry.receiptPreview && (
+                                      <div className="text-xs text-green-600 flex items-center gap-1 justify-end mt-1">
+                                        <CheckCircle size={12} />
+                                        Receipt
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => handleEditEntry(entry, 'expense')}
+                                    className="delete-button google-button-secondary px-3 py-2"
+                                    title="Edit entry"
+                                  >
+                                    <Edit size={18} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm({ id: entry.id, type: 'expense' })}
+                                    className="delete-button google-button-danger px-3 py-2"
+                                  >
+                                    <Delete size={18} />
+                                  </button>
+                                </div>
+                              </div>
+                              {entry.receiptPreview && (
+                                <img 
+                                  src={entry.receiptPreview} 
+                                  alt="Receipt" 
+                                  className="receipt-preview mt-3"
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Delete Confirmation Modal */}
+          {deleteConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="google-card p-6 max-w-sm w-full">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Delete Entry?</h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  This will mark the entry as "Deleted" in your Google Sheet and remove it from the app view. The data will remain in the sheet for record-keeping.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    className="google-button-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDelete(deleteConfirm.id, deleteConfirm.type)}
+                    className="google-button-danger flex-1"
+                  >
+                    Mark as Deleted
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<TravelLog />, document.getElementById('root'));
+  </script>
+
+  <!-- Install Prompt Container -->
+  <div id="install-prompt"></div>
+
+  <!-- PWA Scripts -->
+  <script>
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(registration => {
+            console.log('✓ Service Worker registered');
+          })
+          .catch(error => {
+            console.log('✗ Service Worker registration failed:', error);
+          });
+      });
+    }
+
+    // Install Prompt
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallPrompt();
+    });
+
+    function showInstallPrompt() {
+      const promptEl = document.getElementById('install-prompt');
+      if (promptEl && deferredPrompt) {
+        promptEl.innerHTML = `
+          <div class="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg border border-gray-200 z-50" style="animation: slideDown 0.3s ease-out;">
+            <p class="text-sm font-medium mb-2">📱 Install My Tax Pocket</p>
+            <p class="text-xs text-gray-600 mb-3">Add to your home screen for quick access</p>
+            <div class="flex gap-2">
+              <button onclick="installApp()" class="bg-blue-600 text-white text-xs px-4 py-2 rounded hover:bg-blue-700">
+                Install
+              </button>
+              <button onclick="dismissInstall()" class="bg-gray-200 text-gray-700 text-xs px-4 py-2 rounded hover:bg-gray-300">
+                Not Now
+              </button>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function installApp() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('User installed the app');
+          }
+          deferredPrompt = null;
+          dismissInstall();
+        });
+      }
+    }
+
+    function dismissInstall() {
+      const promptEl = document.getElementById('install-prompt');
+      if (promptEl) promptEl.innerHTML = '';
+    }
+
+    // Detect if already installed
+    window.addEventListener('appinstalled', () => {
+      console.log('App was installed');
+      dismissInstall();
+    });
+  </script>
+</body>
+</html>
